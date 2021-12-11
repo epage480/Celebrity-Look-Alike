@@ -1,0 +1,13 @@
+{
+    "data_path": "/home/eric/Datasets/CASIA-WebFace",
+    "epochs": 10,
+    "batch_size": 32,
+    "input_size": [128, 128],
+    "device": "cuda",
+    "embedding_size": 64,
+
+
+    "num_workers": 2,
+    "pin_memory": true,
+    "shuffle": true
+}
