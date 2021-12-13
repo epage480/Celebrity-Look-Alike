@@ -9,22 +9,6 @@ from typing import Type, Any, Callable, Union, List, Optional
 import torch.nn.functional as F
 
 
-__all__ = ['ResNet', 'resnet18']
-
-
-model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-f37072fd.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-b627a593.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-0676ba61.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-394f9c45.pth',
-    'resnext50_32x4d': 'https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth',
-    'resnext101_32x8d': 'https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth',
-    'wide_resnet50_2': 'https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth',
-    'wide_resnet101_2': 'https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth',
-}
-
-
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -149,13 +133,12 @@ class ResNet(nn.Module):
         self,
         block: Type[Union[BasicBlock, Bottleneck]],
         layers: List[int],
-        num_classes: int = 1000,
+        embedding_size: int = 128,
         zero_init_residual: bool = False,
         groups: int = 1,
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-        embedding_size: int = 64
+        norm_layer: Optional[Callable[..., nn.Module]] = None
     ) -> None:
         super(ResNet, self).__init__()
         if norm_layer is None:
@@ -186,11 +169,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, embedding_size)  # Changed output from num_classes to embedding_size
-
-        # Additional parameter for ArcFace
-        self.W = nn.Parameter(torch.Tensor(embedding_size, num_classes))
-
+        self.fc = nn.Linear(512 * block.expansion, embedding_size)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -250,38 +229,19 @@ class ResNet(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
 
-        # Arcface additions
-        x_norm = F.normalize(x)
-        W_norm = F.normalize(self.W, dim=0)
-        return x_norm @ W_norm
+        return x
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
 
 
-def _resnet(
-    arch: str,
-    block: Type[Union[BasicBlock, Bottleneck]],
-    layers: List[int],
-    pretrained: bool,
-    progress: bool,
-    **kwargs: Any
-) -> ResNet:
-    model = ResNet(block, layers, **kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
-    return model
 
-
-def resnet18(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:
-    r"""ResNet-18 model from
+def resnet18_base(embedding_size, **kwargs: Any) -> ResNet:
+    """ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
-                   **kwargs)
+    return ResNet(BasicBlock, [2, 2, 2, 2], embedding_size=embedding_size, **kwargs)
