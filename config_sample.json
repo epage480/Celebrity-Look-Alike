@@ -1,6 +1,6 @@
 {
     "data_path": "/home/eric/Datasets/CASIA-WebFace",
-    "epochs": 10,
+    "epochs": 100,
     "batch_size": 256,
     "input_size": [112, 112],
     "device": "cuda",
@@ -11,5 +11,7 @@
 
     "num_workers": 2,
     "pin_memory": true,
-    "shuffle": true
+    "shuffle": true,
+
+    "final_model_dir": "/home/eric/PycharmProjects/Pattern_Recognition/final_project/model_saves/final_model.h5"
 }
