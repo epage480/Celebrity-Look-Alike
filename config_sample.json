@@ -1,10 +1,12 @@
 {
     "data_path": "/home/eric/Datasets/CASIA-WebFace",
     "epochs": 10,
-    "batch_size": 32,
-    "input_size": [128, 128],
+    "batch_size": 256,
+    "input_size": [112, 112],
     "device": "cuda",
-    "embedding_size": 64,
+    "embedding_size": 128,
+    "save_path": "/home/eric/PycharmProjects/Pattern_Recognition/final_project/model_saves",
+    "l_r": 0.001,
 
 
     "num_workers": 2,

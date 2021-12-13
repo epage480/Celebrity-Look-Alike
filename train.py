@@ -1,20 +1,23 @@
 import argparse
 import json
+import datetime
+import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from torchvision import transforms
-print(torchvision.__version__)
 
 from datasets.casia_webface import CasiaWebFaceDataset
-from custom_models.resnet18 import resnet18
+from custom_models.resnet18 import resnet18_base
+from custom_models.classifiers import ArcFaceClassifier, SoftMaxClassifier
+from losses.losses import arcface_loss
 
 
 
 
-def train_epoch(model, device, train_loader, optimizer, epoch, verbose=False):
+def train_epoch(model, device, train_loader, optimizer, epoch, num_classes,verbose=False):
     log_interval = 10
 
     # Set model to train mode (enables dropout etc.)
@@ -25,13 +28,14 @@ def train_epoch(model, device, train_loader, optimizer, epoch, verbose=False):
     # 2. Zero gradients
     # 3. Generate predictions (forward pass)
     # 4. Calculate loss
-    # 5. Propogate loss backwards
+    # 5. Propagate loss backwards
     # 6. Run Optimizer (step)
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
-        loss = F.nll_loss(output, target)
+        loss = arcface_loss(output, target, num_classes, m=.4)
+        # loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
         if verbose:
@@ -80,16 +84,43 @@ def main(config_file):
 
     # Define data transformations applied to dataset
     transform = transforms.Compose([
-        transforms.ToPILImage(),
         transforms.Resize(config_dict['input_size']),
-        transforms.ToTensor()
     ])
 
-    train_dataset = CasiaWebFaceDataset(config_dict['data_path'])
+    # Define dataset & dataloader
+    train_dataset = CasiaWebFaceDataset(config_dict["data_path"], transform=transform)
     num_classes = train_dataset.__classes__()
+    print(num_classes)
+    train_loader = torch.utils.data.DataLoader(train_dataset, **train_kwargs)
 
-    # Define model & adjust final layer to
-    model = resnet18(pretrained=False)
+    # Define base model & classifier and place onto device ("cuda")
+    base_model = resnet18_base(embedding_size=config_dict["embedding_size"]).to(device)
+    classifier = ArcFaceClassifier(base_model, config_dict["embedding_size"], num_classes).to(device)
+    # classifier = SoftMaxClassifier(base_model, config_dict["embedding_size"], num_classes).to(device)
+    print(sum(p.numel() for p in base_model.parameters() if p.requires_grad))
+    print(sum(p.numel() for p in classifier.parameters() if p.requires_grad))
+    print("defined model")
+
+    # Declare optimizer to use
+    optimizer = torch.optim.Adam(classifier.parameters(), lr=config_dict["l_r"])
+
+    # Train for given epochs
+    for epoch in range(config_dict['epochs']):
+        train_epoch(classifier, device, train_loader, optimizer, epoch, num_classes=num_classes, verbose=True)
+        # print(sum(p.numel() for p in model.parameters() if p.requires_grad))
+        # test(classifier, device, train_loader)
+
+        # Save model in directory dependent on training conditions
+        file_name = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S.h5")
+        save_dir = config_dict["save_path"]
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        savepath = os.path.join(save_dir, file_name)
+        print("saving model to:", savepath)
+        torch.save(classifier.state_dict(), savepath)
+
+    test(classifier, device, train_loader)
 
 
 if __name__ == '__main__':
