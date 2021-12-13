@@ -4,6 +4,7 @@ from skimage.io import imread
 
 import torch
 from torch.utils.data import Dataset
+from torchvision.io import read_image
 
 
 """
@@ -37,11 +38,15 @@ class CasiaWebFaceDataset(Dataset):
 
     def __getitem__(self, idx):
         """Returns a single image & label pair"""
-        image = imread(self.data_files[idx])
-        image /= 255
-        image = torch.from_numpy(image)
+        image = read_image(self.data_files[idx])
+        image = image / 255.0
+        # image = torch.from_numpy(image)
 
         label = self.id_labels[idx]
+
+        # Converts 1 channel b&w to rgb
+        if image.shape[0] == 1:
+            image = image.expand(3, -1, -1)
 
         if self.transform:
             image = self.transform(image)
@@ -52,19 +57,40 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
     import numpy as np
 
+    print("initializing dataset")
     train_data = CasiaWebFaceDataset('/home/eric/Datasets/CASIA-WebFace')
+    print("done initializing")
 
     # Create subplots, remove ticks, add titles
-    N = 2
-    fig, ax = plt.subplots(nrows=N, ncols=1)
+    N = 10000
 
+    # Checking for unuaually shaped images
     for i in range(N):
+        # print("i:", i)
         rint = np.random.randint(train_data.__len__())
         images, labels = train_data.__getitem__(rint)
+        if images.shape[0] != 3:
+            print("rint:", rint, images.shape)
+            fig, ax = plt.subplots(nrows=1, ncols=1)
+            images = images.expand(3, -1, -1)
+            print(images.shape)
+            images = np.moveaxis(np.array(images), 0, -1)
+            ax.imshow(images, interpolation='nearest')
+            plt.show()
 
-        print(type(images), images.shape)
-        print(labels)
-        ax[i].imshow(images, interpolation='nearest')
+        # print(images.shape)
 
-    fig.tight_layout()
-    plt.show()
+    # # Display N random images
+    # fig, ax = plt.subplots(nrows=N, ncols=1)
+    # for i in range(N):
+    #     rint = np.random.randint(train_data.__len__())
+    #     images, labels = train_data.__getitem__(rint)
+    #
+    #     images = np.moveaxis(np.array(images), 0, -1)
+    #
+    #     print(type(images), images.shape)
+    #     print(labels)
+    #     ax[i].imshow(images, interpolation='nearest')
+    #
+    # fig.tight_layout()
+    # plt.show()
